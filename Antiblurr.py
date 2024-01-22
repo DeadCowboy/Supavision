@@ -15,6 +15,12 @@ def set_min_value_np(image: np.array, min_value=1):
     np.putmask(image, np.abs(image) < min_value, min_value * np.sign(image))
     return image
 
+def reblurr(image, pad=0):
+    return np.abs(fftconvolve(np.abs(image), kernel_circle, mode='same'))
+
+def image_MSE(image1, image2):
+    return np.sum((image1 - image2) ** 2)
+
 image = np.array(Image.open(r'cat.png').convert('L'))
 # Circle of confusion
 radius = int(image.shape[0] * 0.05)
@@ -32,8 +38,6 @@ blurr_size = 55
 kernel /= np.sum(kernel)
 kernel_circle = kernel[kernel_middle[0] - radius: kernel_middle[0] + radius, kernel_middle[1] - radius: kernel_middle[1] + radius]
 
-def reblurr(image, pad=0):
-    return np.abs(fftconvolve(np.abs(image), kernel_circle))
 
 
 transform_kernel = np.fft.fft2(kernel)
@@ -44,12 +48,23 @@ min_freq_amp_kernel = 0.5
 # transform_kernel[transform_kernel < min_freq_amp_kernel] = min_freq_amp_kernel
 
 min_freqs = [min_freq_amp_kernel * p for p in range(1,5)]
-# product_transform = transform_image / set_min_value_np(transform_kernel, min_value=1)
-pyramid_images = [transform_image / set_min_value_np(transform_kernel, min_freq)  for min_freq in min_freqs]
-product_transform = np.sum(pyramid_images, axis=0)
+product_transform = transform_image / set_min_value_np(transform_kernel, min_value=0.9) # 0.9 is optimal by empirical experiment
+# my_range = np.arange(0.1,10,0.1)
+# product_transform = [transform_image / set_min_value_np(transform_kernel, min_value=min_val) for min_val in my_range]
+# pyramid_images = [transform_image / set_min_value_np(transform_kernel, min_freq)  for min_freq in min_freqs]
+# product_transform = np.sum(pyramid_images, axis=0)
+
+# result = [np.fft.ifft2(product_transform) for product_transform in product_transform]
+# result = [np.fft.fftshift(result) for result in result]
 
 result = np.fft.ifft2(product_transform)
 result = np.fft.fftshift(result)
+# reblurred_image = reblurr(result)
+
+# err = [image_MSE(image, reblurr(result)) for result in result]
+
+# plt.plot(my_range, err)
+# plt.show()
 
 plt.imshow(reblurr(result), cmap='gray')
 plt.show()
