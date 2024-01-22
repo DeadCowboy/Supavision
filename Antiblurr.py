@@ -1,5 +1,5 @@
 import numpy as np
-import cv2 as cv
+from PIL import Image
 from math import dist
 from matplotlib import pyplot as plt
 from scipy.signal import fftconvolve
@@ -15,7 +15,7 @@ def set_min_value_np(image: np.array, min_value=1):
     np.putmask(image, np.abs(image) < min_value, min_value * np.sign(image))
     return image
 
-image = cv.imread(r'cat.png', cv.IMREAD_GRAYSCALE)
+image = np.array(Image.open(r'cat.png').convert('L'))
 # Circle of confusion
 radius = int(image.shape[0] * 0.05)
 
@@ -51,13 +51,9 @@ product_transform = np.sum(pyramid_images, axis=0)
 result = np.fft.ifft2(product_transform)
 result = np.fft.fftshift(result)
 
-fig = plt.figure()
-fig.add_subplot(1,3,1)
 plt.imshow(reblurr(result), cmap='gray')
-fig.add_subplot(1,3,2)
+plt.show()
 plt.imshow(np.abs(result), cmap='gray')
-fig.add_subplot(1,3,3)
-plt.imshow(np.abs(np.fft.fftshift(np.fft.fft2(reblurr(result))) - np.fft.fftshift(transform_image)), cmap='gray')
 plt.show()
 
 
