@@ -1,45 +1,48 @@
 import numpy as np
-import cv2 as cv
 from math import dist
 from matplotlib import pyplot as plt
 from scipy.signal import fftconvolve
+from PIL import Image
 
-def set_min_value(image: np.array, min_value=1):
-    # image = np.copy(orig_image)
-    for x,y in np.ndindex(image.shape):
-        if np.abs(image[x,y]) < min_freq_amp_kernel:
-            image[x,y] = min_freq_amp_kernel * np.sign(image[x,y])
-    return image
+class Antiblurr():
+    def __init__(self, filename: str, cof_radius) -> None:
+        # Grayscale working image
+        self.image = np.array(Image.open(filename).convert('L'))
 
-def set_min_value_np(image: np.array, min_value=1):
-    np.putmask(image, np.abs(image) < min_value, min_value * np.sign(image))
-    return image
+        # Circle of confusion
+        self.cof_radius = int(self.image.shape[0] * 0.05)
 
-image = cv.imread(r'cat.png', cv.IMREAD_GRAYSCALE)
-# Circle of confusion
-radius = int(image.shape[0] * 0.05)
+        # Initialize blurr kernel
+        self.kernel, self.kernel_circle = self.create_kernel()
 
-kernel = np.zeros(image.shape)
-kernel_middle = ((kernel.shape[0]-1) // 2, (kernel.shape[1]-1) // 2)
-for x in range(kernel_middle[0]-radius,kernel_middle[0]+radius):
-    for y in range(kernel_middle[1]-radius,kernel_middle[1]+radius):
-        if dist((x,y),kernel_middle) < radius:
-            kernel[x,y] = 1
+        self.image_fft = np.fft.fft2(self.image)
+        self.kernel.fft = np.fft.fft2(self.kernel)
 
-# Blurr pixel edges
-blurr_size = 55
-# kernel = cv.GaussianBlur(kernel,(blurr_size,blurr_size), 30)
-kernel /= np.sum(kernel)
-kernel_circle = kernel[kernel_middle[0] - radius: kernel_middle[0] + radius, kernel_middle[1] - radius: kernel_middle[1] + radius]
+    def set_min_value_np(self,image: np.array, min_value=1):
+        np.putmask(image, np.abs(image) < min_value, min_value * np.sign(image))
+        return image
 
-def reblurr(image, pad=0):
-    return np.abs(fftconvolve(np.abs(image), kernel_circle))
+    def create_kernel(self):
+        """Produce a numpy array with circle in the middle.
+        
+        Generate a numpy array of zeros with the shape of self.image and fills a circle in the middle with
+        equal values, such that their sum is equal to 1. Also returns a numpy array with the bounding box of the nonzero circle"""
+        kernel = np.zeros(self.image.shape)
+        kernel_middle = ((kernel.shape[0]-1) // 2, (kernel.shape[1]-1) // 2)
+        for x in range(kernel_middle[0]-self.cof_radius,kernel_middle[0]+self.cof_radius):
+            for y in range(kernel_middle[1]-self.cof_radius,kernel_middle[1]+self.cof_radius):
+                if dist((x,y),kernel_middle) < self.cof_radius:
+                    kernel[x,y] = 1
+        kernel /= np.sum(kernel)
+        kernel_circle = kernel[kernel_middle[0] - self.cof_radius: kernel_middle[0] + self.cof_radius, kernel_middle[1] - self.cof_radius: kernel_middle[1] + self.cof_radius]
+        return kernel, kernel_circle
 
 
-transform_kernel = np.fft.fft2(kernel)
-transform_image = np.fft.fft2(image)
+    def blurr(self, image, pad=0):
+        return np.abs(fftconvolve(np.abs(image), self.kernel_circle))
 
-min_freq_amp_kernel = 0.5
+
+min_freq_amp_kernel = 0.9
 
 # transform_kernel[transform_kernel < min_freq_amp_kernel] = min_freq_amp_kernel
 
@@ -51,13 +54,9 @@ product_transform = np.sum(pyramid_images, axis=0)
 result = np.fft.ifft2(product_transform)
 result = np.fft.fftshift(result)
 
-fig = plt.figure()
-fig.add_subplot(1,3,1)
 plt.imshow(reblurr(result), cmap='gray')
-fig.add_subplot(1,3,2)
+plt.show()
 plt.imshow(np.abs(result), cmap='gray')
-fig.add_subplot(1,3,3)
-plt.imshow(np.abs(np.fft.fftshift(np.fft.fft2(reblurr(result))) - np.fft.fftshift(transform_image)), cmap='gray')
 plt.show()
 
 
