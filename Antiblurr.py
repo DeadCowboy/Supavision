@@ -6,7 +6,7 @@ from scipy.signal import fftconvolve
 from PIL import Image
 
 class Antiblurr():
-    def __init__(self, filename: str, cof_radius: float = None) -> None:
+    def __init__(self, filename: str, cof_radius: float = None, min_val = None) -> None:
         # Grayscale working image
         self.image = np.array(Image.open(filename).convert('L'))
 
@@ -16,21 +16,22 @@ class Antiblurr():
         #Create kernel array from image
         self.kernel, self.kernel_circle = self.create_kernel()
 
+        self.min_val = min_val if min_val else 0.9
         self.kernel_fft = None
         self.image_fft = None
         self.antiblurr_image = None
 
 
-    def image_SSD(image1, image2):
+    def image_SSD(image1, image2) -> float:
         """Compute the sum of elementwise squared differences between arrays"""
         return np.sum((image1 - image2) ** 2)
 
 
-    def set_min_value(self,image, min_val: float = 0.9):
+    def clamp_image_values(self,image):
         """Clamp all values with lower magnitude than min_val to min_val, conserving the sign.
         
         Every value in the array that is lower in magnitude than min_val is set to min_val with the same sign as the original value."""
-        np.putmask(image, np.abs(image) < min_val, min_val * np.sign(image))
+        np.putmask(image, np.abs(image) < self.min_val, self.min_val * np.sign(image))
         return image
 
     def create_kernel(self):
@@ -52,26 +53,30 @@ class Antiblurr():
     def blurr(self, image, pad: int = 0):
         return np.abs(fftconvolve(np.abs(image), self.kernel_circle, mode="same"))
     
-    def antiblurr(self, min_val: float = 0.9, image = None):
+    def antiblurr(self, image = None):
         """Antiblurr the image.
         
         Antiblurrs the image of the class, except if another image was parsed to be antiblurred instead."""
         target_image = image if image else self.image
         self.image_fft = np.fft.fft2(target_image)
         self.kernel_fft = np.fft.fft2(self.kernel)
-        clamped_kernel_fft = self.set_min_value(self.kernel_fft)
+        clamped_kernel_fft = self.clamp_image_values(self.kernel_fft)
         antiblurr_image_fft = self.image_fft / clamped_kernel_fft
         antiblurr_image = np.fft.ifft2(antiblurr_image_fft)
-        antiblurr_image = np.abs(antiblurr_image) # Take magnitude of complex number
+        # Take magnitude of complex number
+        antiblurr_image = np.abs(antiblurr_image)
         antiblurr_image = np.fft.fftshift(antiblurr_image)
         self.antiblurr_image = antiblurr_image
         return antiblurr_image
     
-    def show(self, image = None):
+    def show(self, image = None, norm_func = None):
         """Display the antiblurred picture in grayscale.
         
         Shows the antiblurred picture in grayscale. If it does not exist, antiblurr() is called.
-        Also a custom image can be parsed, which is then displayed instead if provided."""
+        Also a custom image can be parsed, which is then displayed instead if provided.
+
+        Parse a normalization function via 'norm_func'. This function is called on the image before 
+        displaying."""
         target_image = None
         if image :
             target_image = image
@@ -80,62 +85,13 @@ class Antiblurr():
         else:
             target_image = self.antiblurr()
         
-        plt.imshow(target_image, cmap="gray")
+        if norm_func is None:
+            plt.imshow(target_image, cmap="gray")
+        else:
+            plt.imshow(norm_func(target_image), cmap="gray")
+
+
         plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # Take Fourier of Image
-# image_fourier = cv.dft(np.float32(image), flags=cv.DFT_COMPLEX_OUTPUT)
-# # image_fourier = np.fft.fftshift(image)
-
-
-# # Take Fourier of Kernel
-# kernel_fourier = cv.dft(np.float32(kernel), flags=cv.DFT_COMPLEX_OUTPUT)
-# # kernel_fourier = np.fft.fftshift(kernel)
-
-
-# # Divide Fourier of image by Fourier of Kernel for inverse convolution
-# filteredImage = np.multiply(image_fourier, kernel_fourier)
-# # Inverse FFT of Kernel
-# inverse_image = cv.idft(filteredImage)
-# inverse_image = cv.magnitude(inverse_image[:,:,0], inverse_image[:,:,1])
-# # kernel_img = kernel_img[:,:,0]
-
-# # plt.imshow(kernel, cmap='gray')
-# # plt.show()
-# # plt.imshow(kernel_fft_magnitude)
-# # plt.show()
-# plt.imshow(inverse_image)
-# plt.show()
 
 
 
