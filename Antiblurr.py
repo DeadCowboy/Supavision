@@ -16,16 +16,21 @@ class Antiblurr():
         # Circle of confusion
         self.cof_radius = int(self.image.shape[0] * 0.05)
 
-        self.image_fft = np.fft.fft2(self.image)
-        self.kernel_fft = np.fft.fft2(self.kernel)
+        self.kernel_fft = None
+        self.image_fft = None
+        self.antiblurr_image = None
 
 
-    def image_MSE(image1, image2):
+    def image_SSD(image1, image2):
+        """Compute the sum of elementwise squared differences between arrays"""
         return np.sum((image1 - image2) ** 2)
 
 
-    def set_min_value_np(self,image: np.array, min_value=1):
-        np.putmask(image, np.abs(image) < min_value, min_value * np.sign(image))
+    def set_min_value(self,image: np.array, min_val=0.9):
+        """Clamp all values with lower magnitude than min_val to min_val, conserving the sign.
+        
+        Every value in the array that is lower in magnitude than min_val is set to min_val with the same sign as the original value."""
+        np.putmask(image, np.abs(image) < min_val, min_val * np.sign(image))
         return image
 
     def create_kernel(self):
@@ -44,37 +49,35 @@ class Antiblurr():
         return kernel, kernel_circle
 
 
-    def blurr(self, image, pad=0):
+    def blurr(self, image: np.array, pad=0):
         return np.abs(fftconvolve(np.abs(image), self.kernel_circle, mode="same"))
-
-
-min_freq_amp_kernel = 0.9
-
-# transform_kernel[transform_kernel < min_freq_amp_kernel] = min_freq_amp_kernel
-
-min_freqs = [min_freq_amp_kernel * p for p in range(1,5)]
-product_transform = transform_image / set_min_value_np(transform_kernel, min_value=0.9) # 0.9 is optimal by empirical experiment
-# my_range = np.arange(0.1,10,0.1)
-# product_transform = [transform_image / set_min_value_np(transform_kernel, min_value=min_val) for min_val in my_range]
-# pyramid_images = [transform_image / set_min_value_np(transform_kernel, min_freq)  for min_freq in min_freqs]
-# product_transform = np.sum(pyramid_images, axis=0)
-
-# result = [np.fft.ifft2(product_transform) for product_transform in product_transform]
-# result = [np.fft.fftshift(result) for result in result]
-
-result = np.fft.ifft2(product_transform)
-result = np.fft.fftshift(result)
-# reblurred_image = reblurr(result)
-
-# err = [image_MSE(image, reblurr(result)) for result in result]
-
-# plt.plot(my_range, err)
-# plt.show()
-
-plt.imshow(reblurr(result), cmap='gray')
-plt.show()
-plt.imshow(np.abs(result), cmap='gray')
-plt.show()
+    
+    def antiblurr(self, min_val:float = 0.9, image = None):
+        target_image = image if image else self.image
+        self.image_fft = np.fft.fft2(target_image)
+        self.kernel_fft = np.fft.fft2(self.kernel)
+        clamped_kernel_fft = self.set_min_value(self.kernel_fft)
+        antiblurr_image_fft = self.image_fft / clamped_kernel_fft
+        antiblurr_image = np.fft.ifft2(antiblurr_image_fft)
+        # antiblurr_image = np.fft.fftshift(antiblurr_image)
+        self.antiblurr_image = antiblurr_image
+        return antiblurr_image
+    
+    def show(self, image = None):
+        """Display the antiblurred picture in grayscale.
+        
+        Shows the antiblurred picture in grayscale. If it does not exist, a custom image can be parsed, which is then
+        displayed instead."""
+        target_image = None
+        if image :
+            target_image = image
+        elif self.antiblurr_image:
+            target_image = self.antiblurr_image
+        else:
+            raise RuntimeError("You need to run the antiblurr() method or parse an image")
+        
+        plt.imshow(target_image, cmap="gray")
+        plt.show()
 
 
 
