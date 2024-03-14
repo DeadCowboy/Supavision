@@ -6,15 +6,15 @@ from scipy.signal import fftconvolve
 from PIL import Image
 
 class Antiblurr():
-    def __init__(self, filename: str, cof_radius) -> None:
+    def __init__(self, filename: str, cof_radius: float = None) -> None:
         # Grayscale working image
         self.image = np.array(Image.open(filename).convert('L'))
 
+        # Circle of confusion
+        self.cof_radius = cof_radius if cof_radius else int(self.image.shape[0] * 0.05)
+
         #Create kernel array from image
         self.kernel, self.kernel_circle = self.create_kernel()
-
-        # Circle of confusion
-        self.cof_radius = int(self.image.shape[0] * 0.05)
 
         self.kernel_fft = None
         self.image_fft = None
@@ -26,7 +26,7 @@ class Antiblurr():
         return np.sum((image1 - image2) ** 2)
 
 
-    def set_min_value(self,image: np.array, min_val=0.9):
+    def set_min_value(self,image, min_val: float = 0.9):
         """Clamp all values with lower magnitude than min_val to min_val, conserving the sign.
         
         Every value in the array that is lower in magnitude than min_val is set to min_val with the same sign as the original value."""
@@ -49,32 +49,36 @@ class Antiblurr():
         return kernel, kernel_circle
 
 
-    def blurr(self, image: np.array, pad=0):
+    def blurr(self, image, pad: int = 0):
         return np.abs(fftconvolve(np.abs(image), self.kernel_circle, mode="same"))
     
-    def antiblurr(self, min_val:float = 0.9, image = None):
+    def antiblurr(self, min_val: float = 0.9, image = None):
+        """Antiblurr the image.
+        
+        Antiblurrs the image of the class, except if another image was parsed to be antiblurred instead."""
         target_image = image if image else self.image
         self.image_fft = np.fft.fft2(target_image)
         self.kernel_fft = np.fft.fft2(self.kernel)
         clamped_kernel_fft = self.set_min_value(self.kernel_fft)
         antiblurr_image_fft = self.image_fft / clamped_kernel_fft
         antiblurr_image = np.fft.ifft2(antiblurr_image_fft)
-        # antiblurr_image = np.fft.fftshift(antiblurr_image)
+        antiblurr_image = np.abs(antiblurr_image) # Take magnitude of complex number
+        antiblurr_image = np.fft.fftshift(antiblurr_image)
         self.antiblurr_image = antiblurr_image
         return antiblurr_image
     
     def show(self, image = None):
         """Display the antiblurred picture in grayscale.
         
-        Shows the antiblurred picture in grayscale. If it does not exist, a custom image can be parsed, which is then
-        displayed instead."""
+        Shows the antiblurred picture in grayscale. If it does not exist, antiblurr() is called.
+        Also a custom image can be parsed, which is then displayed instead if provided."""
         target_image = None
         if image :
             target_image = image
         elif self.antiblurr_image:
             target_image = self.antiblurr_image
         else:
-            raise RuntimeError("You need to run the antiblurr() method or parse an image")
+            target_image = self.antiblurr()
         
         plt.imshow(target_image, cmap="gray")
         plt.show()
